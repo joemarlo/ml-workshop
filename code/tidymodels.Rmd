@@ -22,6 +22,8 @@ library(dplyr)
 library(ggplot2)
 library(rsample)
 library(recipes)
+library(parsnip)
+library(workflows)
 ```
 
 # Data {#data}
@@ -107,5 +109,53 @@ rec1 <- recipe(Status ~ ., data=train) |>
     step_other(all_nominal_predictors(), threshold=0.1, other='misc') |>
     step_novel(all_nominal_predictors()) |> 
     step_dummy(all_nominal_predictors(), one_hot=TRUE)
+```
+
+# Define our Model {#DefineModel}
+
+`{parsnip}`
+
+```{r define-model}
+linear_reg()
+boost_tree()
+rand_forest()
+
+linear_reg() |> set_engine('lm')
+linear_reg() |> set_engine('glmnet')
+linear_reg() |> set_engine('stan')
+linear_reg() |> set_engine('brulee')
+
+boost_tree() |> set_engine('xgboost')
+
+spec1 <- boost_tree(
+    mode='classification', 
+    trees=100, tree_depth=4, sample_size=0.7
+) |> 
+    set_engine('xgboost')
+spec1
+```
+
+# Combine our Recipe and Model {#workflow}
+
+`{workflows}`
+
+```{r create-workflow}
+flow1 <- workflow() |> 
+    add_recipe(rec1) |> 
+    add_model(spec1)
+flow1
+```
+
+# Train Model {#TrainModel}
+
+```{r train-model-1}
+mod1 <- fit(flow1, data=train)
+mod1
+```
+
+```{r score-1}
+fake
+predict(mod1, new_data=fake)
+predict(mod1, new_data=fake, type='prob')
 ```
 
