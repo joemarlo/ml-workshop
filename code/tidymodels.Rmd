@@ -13,6 +13,9 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+
+# for those with dark rstudio themes
+options(tidymodels.dark = TRUE)
 ```
 
 # Packages {#packages}
@@ -24,6 +27,8 @@ library(rsample)
 library(recipes)
 library(parsnip)
 library(workflows)
+library(yardstick)
+library(tune)
 ```
 
 # Data {#data}
@@ -157,5 +162,41 @@ mod1
 fake
 predict(mod1, new_data=fake)
 predict(mod1, new_data=fake, type='prob')
+```
+
+# How Good is My Model? {#ModelQuality}
+
+`{rsample}`
+
+```{r set-up-cross-validation}
+cv_set <- vfold_cv(data=train, v=5, repeats=1, strata='Status')
+cv_set
+cv_set$splits
+cv_set$splits[[1]]
+cv_set$splits[[1]] |> training()
+cv_set$splits[[1]] |> testing()
+```
+
+`{yardstick}`
+
+```{r assess-mod-1}
+metrics1 <- metric_set(mn_log_loss, roc_auc)
+metrics1
+```
+
+`{tune}`
+
+```{r run-cross-validation}
+cv1 <- fit_resamples(
+    flow1, 
+    resamples=cv_set, 
+    metrics=metrics1, 
+    control=control_resamples(verbose=TRUE)
+)
+
+cv1
+cv1$.metrics
+
+cv1 |> collect_metrics()
 ```
 
