@@ -71,21 +71,41 @@ ggplot(train, aes(x=Status)) + geom_bar()
 
 
 ```{r recipe}
-recipe(Status ~ ., data=train) |>
+recipe(Status ~ Income + Home, data=train) |> 
+    step_mutate_at(all_nominal_predictors(), fn = ~ coalesce(.x, "Missing")) |> 
+    step_string2factor(Home) |> 
+    step_dummy(Home, one_hot=TRUE) |>
+    prep() |> 
+    bake(new_data=NULL)
+
+rec1 <- recipe(Status ~ ., data=train) |>
+    step_rm(Time) |> 
+    # remove columns that have little variance
+    step_nzv(all_predictors()) |> 
     # not necessary with xgboost
     themis::step_upsample(Status) |>
     # not necessary with xgboost
     step_impute_knn(all_numeric_predictors()) |> 
     # not necessary with xgboost
-    step_factor2string(all_nominal_predictors()) |> 
+    # step_factor2string(all_nominal_predictors()) |> 
     # step_mutate(Home=tidyr::replace_na(Home, 'missing')) |> 
     # step_mutate(Job=tidyr::replace_na(Job, 'missing')) |> 
     # step_mutate(Marital=tidyr::replace_na(Marital, 'missing')) |> 
-    step_mutate_at(
-        all_nominal_predictors(), fn = ~ coalesce(.x, "Missing")
-    ) |> 
-    step_string2factor(all_nominal_predictors()) |> 
-    prep(strings_as_factors=FALSE) |>
-    bake(new_data=NULL)
+    # step_mutate_at(
+    #     all_nominal_predictors(), fn = ~ coalesce(.x, "Missing")
+    # ) |> 
+    # step_string2factor(all_nominal_predictors()) |> 
+    # same as above
+    # step_string2factor(Home, Job, Marital) |> 
+    # same as coalesce and step_mutate
+    step_unknown(all_nominal_predictors()) |> 
+    # same as above
+    step_discretize(Age) |> 
+    # not necessary for xgboost
+    step_normalize(all_numeric_predictors()) |> 
+    # this is needed for both glmnet and xgboost
+    step_other(all_nominal_predictors(), threshold=0.1, other='misc') |>
+    step_novel(all_nominal_predictors()) |> 
+    step_dummy(all_nominal_predictors(), one_hot=TRUE)
 ```
 
