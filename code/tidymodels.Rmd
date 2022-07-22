@@ -33,6 +33,7 @@ library(dials)
 library(tictoc)
 library(doFuture)
 library(parallel)
+library(vip)
 ```
 
 # Data {#data}
@@ -397,5 +398,24 @@ bind_cols(preds4.1, test |> select(Status)) |> accuracy(Status, .pred_class)
 check4 <- last_fit(flow4, split=credit_split, metrics=metrics1)
 check4
 check4$.metrics
+```
+
+# Understand the Model (As Best we Can) {#UnderstandModel}
+
+`{vip}`
+
+```{r vip}
+mod4 |> extract_fit_engine() |> vip()
+```
+
+# Fit Model on Entire Data {#FitAllData}
+
+```{r fit-all-data}
+mod_full <- fit(flow4, data=credit)
+mod_full
+
+predict(mod_full, new_data=fake[1, ], type='prob')
+predict(mod_full, new_data=fake[2, ], type='prob')
+predict(mod_full, new_data=fake[3:4, ], type='prob')
 ```
 
