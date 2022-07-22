@@ -357,3 +357,45 @@ tic.log()
 ```
 
 
+```{r pipe-comparison}
+# data %>% lm(y~x, data=.)
+# data |> lm(y~x, data=_)
+
+substitute(x |> sum())
+substitute(x %>% sum())
+```
+
+# Choose the Best Model {#BestModel}
+
+```{r choose-best}
+search3 |> show_best(metric='roc_auc')
+search3 |> select_best(metric='roc_auc')
+
+chosen_params <- search3 |> select_by_one_std_err(metric='roc_auc', trees)
+chosen_params
+```
+
+
+```{r set-params}
+flow4 <- finalize_workflow(flow3, parameters=chosen_params)
+
+flow3
+flow4
+```
+
+```{r fit-chosen-model}
+mod4 <- fit(flow4, data=train)
+mod4
+
+preds4 <- predict(mod4, new_data=test, type='prob')
+preds4.1 <- predict(mod4, new_data=test, type='class')
+preds4
+preds4.1
+
+bind_cols(preds4.1, test |> select(Status)) |> accuracy(Status, .pred_class)
+
+check4 <- last_fit(flow4, split=credit_split, metrics=metrics1)
+check4
+check4$.metrics
+```
+
