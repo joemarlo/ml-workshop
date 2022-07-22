@@ -309,7 +309,20 @@ search3 <- tune_grid(
     control=control_grid(verbose=TRUE)
 )
 toc(log=TRUE)
+
+tic.log()
 ```
+
+```{r grid-check}
+search3
+search3$.metrics[[1]]
+search3 |> collect_metrics()
+search3 |> autoplot()
+search3 |> autoplot(metric='roc_auc')
+
+search3 |> show_best(metric='roc_auc', n=3)
+```
+
 
 
 
