@@ -30,6 +30,7 @@ library(workflows)
 library(yardstick)
 library(tune)
 library(dials)
+library(tictoc)
 ```
 
 # Data {#data}
@@ -272,7 +273,7 @@ flow3 <- flow2 |> update_recipe(rec3) |> update_model(spec3)
 flow3
 ```
 
-```{r}
+```{r set-parameter-ranges}
 tune_args(flow3)
 flow3 |> 
     parameters()
@@ -281,10 +282,35 @@ tunable(flow3)
 
 flow3 |> extract_parameter_set_dials() |> select(object) |> magrittr::extract2(1)
 
-flow3 |> 
-    tune_args() |> 
+params3 <- flow3 |> 
+    extract_parameter_set_dials() |> 
     update(
-        trees=trees(range=c(50, 300)
+        trees=trees(range=c(50, 300)),
+        tree_depth=tree_depth(range=c(2, 8))
     )
+params3
+params3$object
 ```
+
+```{r param-combinations}
+grid3 <- grid_random(params3, size=50)
+grid3
+```
+
+`{tictoc}`
+
+```{r grid-search}
+tic(msg='Search 3')
+search3 <- tune_grid(
+    flow3,
+    resamples=cv_set,
+    grid=grid3,
+    metrics=metrics1,
+    control=control_grid(verbose=TRUE)
+)
+toc(log=TRUE)
+```
+
+
+
 
