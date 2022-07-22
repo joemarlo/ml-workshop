@@ -237,7 +237,8 @@ cv2 |> collect_metrics()
 `{dials}`
 
 ```{r tunable-recipe}
-rec2 <- recipe(Status ~ ., data=train) |>
+# skipped rec2
+rec3 <- recipe(Status ~ ., data=train) |>
     step_rm(Time) |> 
     # remove columns that have little variance
     step_nzv(all_predictors()) |> 
@@ -252,6 +253,38 @@ rec2 <- recipe(Status ~ ., data=train) |>
     step_other(all_nominal_predictors(), threshold=tune(), other='misc') |>
     step_novel(all_nominal_predictors()) |> 
     step_dummy(all_nominal_predictors(), one_hot=TRUE)
-rec2
+rec3
+```
+
+```{r tunable-model-spec}
+spec3 <- boost_tree(
+    mode='classification',
+    trees=tune(),
+    tree_depth=tune(),
+    sample_size=0.7
+) |> 
+    set_engine('xgboost')
+spec3
+```
+
+```{r tunable-workflow}
+flow3 <- flow2 |> update_recipe(rec3) |> update_model(spec3)
+flow3
+```
+
+```{r}
+tune_args(flow3)
+flow3 |> 
+    parameters()
+
+tunable(flow3)
+
+flow3 |> extract_parameter_set_dials() |> select(object) |> magrittr::extract2(1)
+
+flow3 |> 
+    tune_args() |> 
+    update(
+        trees=trees(range=c(50, 300)
+    )
 ```
 
