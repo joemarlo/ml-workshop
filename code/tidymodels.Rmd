@@ -29,6 +29,7 @@ library(parsnip)
 library(workflows)
 library(yardstick)
 library(tune)
+library(dials)
 ```
 
 # Data {#data}
@@ -132,6 +133,8 @@ linear_reg() |> set_engine('brulee')
 
 boost_tree() |> set_engine('xgboost')
 
+show_model_info('boost_tree')
+
 spec1 <- boost_tree(
     mode='classification', 
     trees=100, tree_depth=4, sample_size=0.7
@@ -139,6 +142,8 @@ spec1 <- boost_tree(
     set_engine('xgboost')
 spec1
 ```
+
+Explore model types at https://www.tidymodels.org/find/parsnip/
 
 # Combine our Recipe and Model {#workflow}
 
@@ -198,5 +203,55 @@ cv1
 cv1$.metrics
 
 cv1 |> collect_metrics()
+```
+
+# Try Different Parameters {#DiffParams}
+
+```{r diff-params}
+spec2 <- boost_tree(
+    mode='classification', 
+    trees=200, tree_depth=2, sample_size=0.7
+) |> 
+    set_engine('xgboost')
+spec2
+
+# flow2 <- workflow() |> add_recipe(rec1) |> add_model(spec2)
+flow2 <- flow1 |> update_model(spec2)
+flow2
+```
+
+```{r cv-2}
+cv2 <- fit_resamples(
+    flow2,
+    resamples=cv_set,
+    metrics=metrics1,
+    control=control_resamples(verbose=TRUE)
+)
+
+cv1 |> collect_metrics()
+cv2 |> collect_metrics()
+```
+
+# How do we Choose the Best Model Parameters? {#ChooseParams}
+
+`{dials}`
+
+```{r tunable-recipe}
+rec2 <- recipe(Status ~ ., data=train) |>
+    step_rm(Time) |> 
+    # remove columns that have little variance
+    step_nzv(all_predictors()) |> 
+    # not necessary with xgboost
+    themis::step_upsample(Status) |>
+    # not necessary with xgboost
+    step_impute_knn(all_numeric_predictors()) |> 
+    step_unknown(all_nominal_predictors()) |> 
+    # same as above
+    step_discretize(Age) |> 
+    # this is needed for both glmnet and xgboost
+    step_other(all_nominal_predictors(), threshold=tune(), other='misc') |>
+    step_novel(all_nominal_predictors()) |> 
+    step_dummy(all_nominal_predictors(), one_hot=TRUE)
+rec2
 ```
 
