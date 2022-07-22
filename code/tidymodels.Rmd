@@ -34,6 +34,7 @@ library(tictoc)
 library(doFuture)
 library(parallel)
 library(vip)
+library(vetiver)
 ```
 
 # Data {#data}
@@ -417,5 +418,24 @@ mod_full
 predict(mod_full, new_data=fake[1, ], type='prob')
 predict(mod_full, new_data=fake[2, ], type='prob')
 predict(mod_full, new_data=fake[3:4, ], type='prob')
+```
+
+# Convert Model to API {#ConvertModelToAPI}
+
+`{vetiver}`
+
+```{r make-api}
+v <- vetiver_model(mod4, model_name='credit_scorer', description='XGBoost model', TRUE)
+v
+v$model
+v$ptype
+
+
+the_board <- pins::board_temp()
+the_board
+
+vetiver_pin_write(the_board, v)
+
+vetiver_write_plumber(the_board, name='credit_scorer', file='mod4.r')
 ```
 
