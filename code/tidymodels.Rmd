@@ -31,6 +31,8 @@ library(yardstick)
 library(tune)
 library(dials)
 library(tictoc)
+library(doFuture)
+library(parallel)
 ```
 
 # Data {#data}
@@ -324,6 +326,34 @@ search3 |> show_best(metric='roc_auc', n=3)
 ```
 
 
+```{r check-cores}
+parallelly::availableCores()
+parallelly::availableCores(logical=FALSE)
+parallelly::availableCores(logical=TRUE)
+parallelly::availableWorkers(logical=FALSE)
+```
 
+`{doFuture}` and `{parallel}`
+
+```{r register-backend}
+registerDoFuture()
+cl <- makeCluster(8)
+cl
+plan(cluster, workers=cl)
+```
+
+```{r grid-search-parallel}
+tic(msg='Search 3 Parallel')
+search3_parallel <- tune_grid(
+    flow3,
+    resamples=cv_set,
+    grid=grid3,
+    metrics=metrics1,
+    control=control_grid(verbose=TRUE, allow_par=TRUE, parallel_over='everything')
+)
+toc(log=TRUE)
+
+tic.log()
+```
 
 
