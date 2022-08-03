@@ -24,9 +24,3 @@ You can add options to executable code like this
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
-
-## Other
-
--   time series: forecast, fable, modeltime
-
--   

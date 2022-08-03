@@ -4,7 +4,15 @@ format: html
 editor: visual
 ---
 
-## Quarto
+## Linear models
+
+## Tree-based methods
+
+## Time series models
+
+-   Not covered here but see packages: forecast, fable, modeltime
+
+## Our data
 
 Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
 
