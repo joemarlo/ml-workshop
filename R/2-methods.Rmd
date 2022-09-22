@@ -525,18 +525,4 @@ ranger::importance(model_ranger) %>%
 - [xgboost](https://xgboost.readthedocs.io/en/latest/tutorials/model.html)  
   
   
-## What about lasso?
-
-<!-- often used for feature selection -->
-
-
-<!-- daniella witton (intro to statistical learning) with rob tibshirani (creator) -->
-![](img/lasso.png)
-
-!TODO !verify!!
-$Loss = Error(Y - \widehat{Y}) + \lambda \sum_1^n |w_i|$
-
-<!-- LARS (least angle regression) -->
-
-slides jaredlander website --> circle square picture
 
