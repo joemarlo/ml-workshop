@@ -1,0 +1,266 @@
+---
+title: "1. The Whole Game"
+author: "Joe Marlo (Lander Analytics)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Goals for the workshop
+
+- Understand the theory behind a few ML methods
+- Implement a machine learning pipeline in R using tidymodels
+- Understand where to go for help
+- Bonus: reproducible methods (renv, targets, packages), time-series, "productionizing"
+
+
+# R refresher
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+## dplyr refresher
+
+```{r}
+# using pipes
+plot(1:10)
+1:10 %>% plot()
+1:10 |> plot()
+
+1:10 %>% plot(x = ., y = rnorm(10))
+
+# mutating
+head(mtcars)
+mtcars %>% 
+    mutate(transmission = ifelse(am == 1, 'Manual', 'Automatic')) %>% 
+    select(am, transmission) %>% 
+    head()
+
+# summarizing
+mtcars %>% 
+    group_by(cyl) %>% 
+    summarize(mean_mpg = mean(mpg))
+```
+
+## ggplot refresher
+
+```{r}
+# basic scatter
+mtcars %>% 
+    ggplot(aes(x = disp, y = mpg)) +
+    geom_point()
+
+# regression
+mtcars %>% 
+    ggplot(aes(x = disp, y = mpg)) +
+    geom_smooth(method = 'lm') 
+
+# multiple geoms
+mtcars %>% 
+    ggplot(aes(x = disp, y = mpg)) +
+    geom_point() +
+    geom_smooth(method = 'lm')
+
+# facet
+mtcars %>% 
+    ggplot(aes(x = disp, y = mpg)) +
+    geom_point() +
+    geom_smooth(method = 'lm') +
+    facet_wrap(~gear, ncol = 1)
+
+# labels
+mtcars %>% 
+    ggplot(aes(x = disp, y = mpg)) +
+    geom_point() +
+    labs(title = 'Displacement vs. miles-per-gallon (MPG)',
+         x = 'Displacement',
+         y = 'MPG')
+```
+
+
+# Background
+
+![](img/data-science.png)
+^[Source: R for Data Science]
+
+<br>
+
+Goal is to examine the relationship between a response variable (dependent, target) $Y$, and predictor variables (features, inputs, independent variables) $X = (X_1, ..., X_p)$
+
+$$
+Y = f(x) + \epsilon
+$$
+
+Where $\epsilon$ = irreducible error
+
+<img src='img/ml-form.png' width="70%"></img>
+
+^[Source: Ravi Shroff (New York University)]
+
+
+<br>
+
+
+# Application
+
+```{r packages, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidymodels)
+set.seed(44)
+```
+
+The steps to modeling:  
+- Exploratory data analysis (EDA)  
+- Data prep, model fitting, and making predictions  
+- Model assessing  
+- Fitting many models  
+
+<br>
+
+## EDA
+
+```{r eda}
+# load data
+data(credit_data, package = 'modeldata')
+credit <- dplyr::as_tibble(credit_data) %>% na.omit()
+# ?modeldata::credit_data
+
+# peek at data
+# View(credit)
+head(credit)
+
+# view balance of outcome variable
+credit$Status %>% table()
+
+# view univariate distributions of numerical columns
+credit %>% 
+    select(where(is.numeric)) %>% 
+    tidyr::pivot_longer(everything()) %>% 
+    ggplot(aes(x = value)) + 
+    geom_histogram() + 
+    facet_wrap(~name, scales = 'free') + 
+    labs(title = 'Univariate distributions of numeric columns in credit data',
+         x = NULL,
+         y = 'n')
+```
+
+
+<br>
+
+## Fitting
+
+```{r fit}
+# create train / test split
+set.seed(44)
+credit_split <- rsample::initial_split(credit, prop = 0.85, strata = 'Status')
+train <- rsample::training(credit_split)
+test <- rsample::testing(credit_split)
+
+# set our model form and prep data
+our_recipe <- recipes::recipe(Status ~ Income + Home, data = train) %>% 
+    recipes::step_mutate_at(all_nominal_predictors(), fn = ~ coalesce(.x, "Missing")) %>%  
+    recipes::step_string2factor(Home) %>% 
+    recipes::step_dummy(Home, one_hot = TRUE)
+
+# create model using parsnip
+our_model_spec <- parsnip::logistic_reg() %>% 
+    parsnip::set_engine('glm') %>% 
+    parsnip::set_mode('classification')
+
+# create workflow
+our_wf <- workflows::workflow() %>% 
+    workflows::add_recipe(our_recipe) %>%  
+    workflows::add_model(our_model_spec)
+our_wf$trained
+
+# fit model (skipping cross-validation for now)
+mod1 <- parsnip::fit(our_wf, data = train)
+mod1$trained
+# broom::tidy(mod1)
+predict(mod1, new_data = train)
+
+# make predictions on new data
+predict(mod1, new_data = test)
+```
+<br>
+
+## Assessing
+
+```{r assess}
+# create out cross validation folds
+cv_set <- rsample::vfold_cv(
+    data = train,
+    v = 5,
+    repeats = 1,
+    strata = 'Status'
+)
+# strata argument maintains proportion between Status variable
+    # sampling is done *within* the stratum
+# cv_set$splits[[1]][[1]]
+
+# define out metrics
+our_metrics <- yardstick::metric_set(
+    yardstick::accuracy, 
+    yardstick::mn_log_loss, 
+    yardstick::roc_auc
+)
+
+# calculate the metrics on the cv resamples
+cv1 <- tune::fit_resamples(
+    our_wf,
+    resamples = cv_set,
+    metrics = our_metrics,
+    control = control_resamples(verbose = TRUE)
+)
+
+# cv1
+# cv1$.metrics
+
+# show the mean estimate across the folds for each metric 
+cv1 |> collect_metrics()
+```
+
+<br>
+
+## Fitting many
+
+```{r fit-many}
+# add another model: random forest
+our_model_spec_rf <- parsnip::rand_forest(
+    mode = 'classification',
+    trees = tune::tune(),
+    mtry = tune::tune()
+) %>% 
+    parsnip::set_engine('ranger')
+
+# organize models into a workflow set
+credit_workflow <- workflowsets::workflow_set(
+  list(basic = our_recipe),
+  models = list(glm = our_model_spec,
+                rf = our_model_spec_rf)
+)
+
+# tune the models using a grid
+credit_grid <- credit_workflow %>%
+  workflow_map(
+    'tune_grid',
+    resamples = cv_set,
+    seed = 44,
+    verbose = TRUE,
+    metrics = our_metrics
+  )
+
+# look at the metrics
+credit_grid %>% collect_metrics()
+credit_grid %>% 
+    autoplot() + 
+    labs(title = 'Cross-validation results', 
+         y = NULL)
+```
+
