@@ -41,7 +41,7 @@ library(vetiver)
 
 ```{r load-data}
 data(credit_data, package='modeldata')
-credit <- as_tibble(credit_data)
+credit <- dplyr::as_tibble(credit_data)
 
 credit
 ```

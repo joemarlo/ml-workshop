@@ -1,0 +1,48 @@
+---
+title: "5. More"
+author: "Joe Marlo (Lander Analytics)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Production'izing
+
+Putting it out there: apps, apis, packages, servers, algo fairness
+
+model version'ing
+
+
+## Time series models
+
+Not covered here but see packages: forecast, fable, modeltime (more in the tidymodels framework)
+
+## Reproducibility
+
+### renv
+
+packrat
+
+## Good habits
+
+Prefixing, writing as a package or like a package. Unit tests (testthat); style guides; comments
+
+
+## Final thoughts
+
+Easy to do the wrong thing – common pitfalls. Think hard about what the model would actually see in practice
+
+creating a feature within a time series model that is just the lagged predictor
+
+running feature selector once for all CV folds
+
+
+## Additional resources
+
+- tiydmodels: 
+    - https://www.tidymodels.org/
+    - https://www.rstudio.com/conference/2022/keynotes/applied-machine-learning/
+- https://r4ds.had.co.nz/
