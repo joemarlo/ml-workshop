@@ -1,0 +1,254 @@
+---
+title: "3. Fitting"
+author: "Joe Marlo (Lander Analytics)"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Fitting models systematically
+
+### How to do this systematically
+
+Enter tidymodels and tuning.
+
+## The data 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidymodels)
+
+# load data
+data(credit_data, package = 'modeldata')
+credit <- dplyr::as_tibble(credit_data)
+```
+
+### Split into Train and Test {#TrainTestsplit}
+
+```{r split-data}
+set.seed(44)
+credit_split <- initial_split(credit, prop = 0.85, strata = 'Status')
+credit_split
+
+train <- training(credit_split)
+test <- testing(credit_split)
+
+train
+test
+```
+
+Create fake "new" data {#FakeData} for later use
+
+```{r fake-data}
+fake <- credit %>% 
+    slice_sample(n = 10) %>% 
+    select(-Status)
+fake
+```
+
+
+### Preprocess Data AKA Feature Engineering {#recipes}
+
+Load `{recipes}`
+
+```{r check-balance}
+train %>% 
+    ggplot(aes(x = Status)) + 
+    geom_bar()
+```
+
+
+```{r recipe}
+recipes::recipe(Status ~ Income + Home, data = train) |> 
+    step_mutate_at(all_nominal_predictors(), fn = ~ coalesce(.x, "Missing")) |> 
+    step_string2factor(Home) |> 
+    step_dummy(Home, one_hot=TRUE) |>
+    prep() |> 
+    bake(new_data=NULL)
+
+rec1 <- recipes::recipe(Status ~ ., data = train) |>
+    step_rm(Time) |> 
+    # remove columns that have little variance
+    step_nzv(all_predictors()) |> 
+    # not necessary with xgboost
+    themis::step_upsample(Status) |>
+    # not necessary with xgboost
+    step_impute_knn(all_numeric_predictors()) |> 
+    # not necessary with xgboost
+    # step_factor2string(all_nominal_predictors()) |> 
+    # step_mutate(Home=tidyr::replace_na(Home, 'missing')) |> 
+    # step_mutate(Job=tidyr::replace_na(Job, 'missing')) |> 
+    # step_mutate(Marital=tidyr::replace_na(Marital, 'missing')) |> 
+    # step_mutate_at(
+    #     all_nominal_predictors(), fn = ~ coalesce(.x, "Missing")
+    # ) |> 
+    # step_string2factor(all_nominal_predictors()) |> 
+    # same as above
+    # step_string2factor(Home, Job, Marital) |> 
+    # same as coalesce and step_mutate
+    step_unknown(all_nominal_predictors()) |> 
+    # same as above
+    step_discretize(Age) |> 
+    # not necessary for xgboost
+    step_normalize(all_numeric_predictors()) |> 
+    # this is needed for both glmnet and xgboost
+    step_other(all_nominal_predictors(), threshold=0.1, other='misc') |>
+    step_novel(all_nominal_predictors()) |> 
+    step_dummy(all_nominal_predictors(), one_hot=TRUE)
+```
+
+## Define our Model {#DefineModel}
+
+`{parsnip}`
+
+```{r define-model}
+linear_reg()
+boost_tree()
+rand_forest()
+
+linear_reg() %>% set_engine('lm')
+linear_reg() %>% set_engine('glmnet')
+rand_forest() %>% set_engine('ranger')
+boost_tree() %>% set_engine('xgboost')
+
+show_model_info('boost_tree')
+
+spec1 <- boost_tree(
+    mode = 'classification',
+    trees = 100,
+    tree_depth = 4,
+    sample_size = 0.7
+) |>
+    set_engine('xgboost')
+    # https://curso-r.github.io/treesnip/
+spec1
+```
+
+Explore model types at https://www.tidymodels.org/find/parsnip/
+
+## Combine our Recipe and Model {#workflow}
+
+`{workflows}`
+
+```{r create-workflow}
+flow1 <- workflow() |> 
+    add_recipe(rec1) |> 
+    add_model(spec1)
+flow1
+```
+
+
+## Train Model {#TrainModel}
+
+So simple!
+
+```{r train-model-1}
+mod1 <- fit(flow1, data=train)
+mod1
+```
+
+```{r score-1}
+fake
+predict(mod1, new_data = fake)
+predict(mod1, new_data = fake, type = 'prob')
+```
+
+
+Create a workflow set using more recipes and models
+
+```{r}
+# add the basic workflow from yesterday
+rec_basic <- recipes::recipe(Status ~ Income + Home, data = train) %>% 
+    recipes::step_naomit() %>% 
+    # recipes::step_mutate_at(all_nominal_predictors(), fn = ~ coalesce(.x, "Missing")) %>%
+    # recipes::step_impute_knn(Income) %>%
+    recipes::step_string2factor(Home) %>% 
+    recipes::step_dummy(Home, one_hot = TRUE)
+
+# add additional models
+spec_glm <- logistic_reg() %>% 
+  set_engine('glm') %>% 
+  set_mode('classification')
+
+spec_dt <- parsnip::decision_tree(tree_depth = tune()) %>% 
+  set_engine('rpart') %>% 
+  set_mode('classification')
+
+spec_rf <- parsnip::rand_forest(
+    mode = 'classification',
+    trees = tune::tune(),
+    mtry = tune::tune()
+) %>% 
+    parsnip::set_engine('ranger')
+
+spec_boost <- parsnip::boost_tree(
+    mode = 'classification',
+    trees = tune::tune(),
+    tree_depth = tune::tune()
+) %>% 
+    set_engine('xgboost')
+
+# organize models into a workflow set
+credit_workflow <- workflowsets::workflow_set(
+  list(#basic = rec_basic,
+       complex = rec1),
+  models = list(glm = spec_glm,
+                dt = spec_dt,
+                rf = spec_rf,
+                boost = spec_boost)
+)
+credit_workflow
+```
+
+
+### Cross validaiton
+
+![](img/grid_search_cross_validation.png)
+^[scikit-learn]
+
+A wrinkle: train, test, validate
+
+
+```{r}
+# cross validation
+credit_split <- initial_split(credit, prop = 0.6)
+credit_train <- training(credit_split)
+credit_test <- testing(credit_split)
+credit_folds <- vfold_cv(credit_train, v = 3)
+
+# create tune grid just for xgb
+tune_grid <- dials::grid_regular(
+    trees(c(50, 200)), 
+    tree_depth(),
+    # mtry(c(2L, 10L)),
+    levels = 3
+)
+
+# define out metrics
+our_metrics <- yardstick::metric_set(
+    yardstick::accuracy, 
+    yardstick::mn_log_loss, 
+    yardstick::roc_auc
+)
+
+# tune the models using a grid
+credit_grid <- credit_workflow %>%
+    option_add(grid = tune_grid, 
+               id = 'basic_boost') %>% 
+    workflow_map(
+        'tune_grid',
+        resamples = credit_folds,
+        seed = 44,
+        verbose = TRUE,
+        metrics = our_metrics
+    )
+
+# look at the metrics
+autoplot(credit_grid) + 
+  labs(title = 'Cross-validation results', 
+       y = NULL)
+```

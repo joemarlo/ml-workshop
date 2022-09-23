@@ -433,8 +433,8 @@ credit <- readr::read_csv('https://raw.githubusercontent.com/joemarlo/regression
 ```{r echo=FALSE}
 credit %>% 
   mutate(across(everything(), round, digits = 2)) %>% 
-  head()
-  # reactable::reactable()
+  # head()
+  reactable::reactable()
 ```
 
 
@@ -525,5 +525,3 @@ ranger::importance(model_ranger) %>%
 - [StatQuest CART](https://www.youtube.com/watch?v=_L39rN6gz7Y)  
 - [xgboost](https://xgboost.readthedocs.io/en/latest/tutorials/model.html)  
   
-
-
